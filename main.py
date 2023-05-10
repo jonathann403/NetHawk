@@ -89,24 +89,15 @@ class ProxyServer:
         client_socket.send(success_response)
 
         # Start bidirectional forwarding between the client and target server
-        forward_client_to_target = threading.Thread(target=self.forward_data, args=(client_socket, target_socket))
-        forward_target_to_client = threading.Thread(target=self.forward_data, args=(target_socket, client_socket))
+        forward_client_to_target = threading.Thread(target=self.forward_data, args=(self, client_socket, target_socket, host, port))
+        forward_target_to_client = threading.Thread(target=self.forward_data, args=(self, target_socket, client_socket, host, port))
 
         forward_client_to_target.start()
         forward_target_to_client.start()
 
     @staticmethod
-    def forward_data(source_socket, destination_socket):
+    def forward_data(self, source_socket, destination_socket, host, port):
         while True:
-            data = source_socket.recv(8192)
-            if data:
-                destination_socket.send(data)
-            else:
-                break
-        source_socket.close()
-        destination_socket.close()
-
-        """        while True:
             try:
                 data = source_socket.recv(self.buffer_size)
                 if data:
@@ -114,8 +105,10 @@ class ProxyServer:
                 else:
                     break
             except OSError as e:
-                print(f"[*] {self.bind_host}:{self.bind_port} | {e}")
-                break"""
+                print(f"[*] {self.bind_host}:{self.bind_port} | {host}:{port} closed | {e}")
+                break
+        source_socket.close()
+        destination_socket.close()
 
 
 def main():
