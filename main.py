@@ -1,32 +1,14 @@
-import socket
+from config import PROXIES
 import threading
-
-PROXY_ADDRESS = '127.0.0.1'
-PROXY_PORT = 9191
-
-
-def extract_host_port(request):
-    host = ""
-    port = 80  # Default port if not specified
-
-    # Parse the request headers to extract the host and port
-    headers = request.split(b'\r\n')
-    for header in headers:
-        if header.startswith(b'Host:'):
-            host = header.split(b' ')[1].decode()
-            if ':' in host:
-                host, port = host.split(':')
-                port = int(port)
-            break
-
-    return host, port
+import socket
 
 
 class ProxyServer:
 
-    def __init__(self, bind_host, bind_port):
+    def __init__(self, bind_host, bind_port, buffer_size):
         self.bind_host = bind_host
         self.bind_port = bind_port
+        self.buffer_size = buffer_size
 
     def start(self):
         proxy_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -36,21 +18,37 @@ class ProxyServer:
 
         while True:
             client_socket, addr = proxy_socket.accept()
-            print("[*] Accepted connection from {}:{}".format(addr[0], addr[1]))
+            # print("[*] Accepted connection from {}:{}".format(addr[0], addr[1]))
 
             # Create a new thread to handle the client connection
             client_thread = threading.Thread(target=self.handle_client, args=(client_socket,))
             client_thread.start()
 
+    @staticmethod
+    def extract_host_port(self, request):
+        host = ""
+        port = 80  # Default port if not specified
+
+        # Parse the request headers to extract the host and port
+        headers = request.split(b'\r\n')
+        for header in headers:
+            if header.startswith(b'Host:'):
+                host = header.split(b' ')[1].decode()
+                if ':' in host:
+                    host, port = host.split(':')
+                    port = int(port)
+                break
+
+        return host, port
+
     def handle_client(self, client_socket):
         # Receive the client's request
-        request = client_socket.recv(4096)
+        request = client_socket.recv(self.buffer_size)
         # print("[*] Received request:\n", request)
 
         # Extract the host and port from the request headers
-        host, port = extract_host_port(request)
-        print("[*] Request Host:", host)
-        print("[*] Request Port:", port)
+        host, port = self.extract_host_port(self, request)
+        print(f"[*] Request sent to {host}:{port}")
 
         if port == 443:  # HTTPS connection
             self.handle_https_tunnel(self, client_socket, host, port)
@@ -65,7 +63,7 @@ class ProxyServer:
         target_socket.send(request)
 
         # Receive the response from the target server
-        response = target_socket.recv(4096)
+        response = target_socket.recv(self.buffer_size)
         # print("[*] Received response:\n", response)
 
         # Send the response back to the client
@@ -96,7 +94,7 @@ class ProxyServer:
     def forward_data(self, source_socket, destination_socket):
         while True:
             try:
-                data = source_socket.recv(4096)
+                data = source_socket.recv(self.buffer_size)
                 if data:
                     destination_socket.send(data)
                 else:
@@ -109,7 +107,21 @@ class ProxyServer:
         destination_socket.close()
 
 
+def main():
+    proxy_servers = []
+
+    for PROXY in PROXIES:
+        if PROXY["STATUS"] == "ENABLED":
+            proxy_servers.append(ProxyServer(PROXY["HOST"], PROXY["PORT"], 8192))
+
+    for proxy_server in proxy_servers:
+        try:
+            proxy_thread = threading.Thread(target=proxy_server.start)
+            proxy_thread.start()
+        except OSError as e:
+            print(f"[*] Proxy server on {proxy_server.bind_host}:{proxy_server.bind_port} failed to start | {e}")
+
+
 if __name__ == '__main__':
-    proxy_server = ProxyServer(PROXY_ADDRESS, PROXY_PORT)
-    proxy_server.start()
+    main()
 
