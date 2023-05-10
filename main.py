@@ -12,9 +12,13 @@ class ProxyServer:
 
     def start(self):
         proxy_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        proxy_socket.bind((self.bind_host, self.bind_port))
-        proxy_socket.listen(5)
-        print("[*] Proxy server started on {}:{}".format(self.bind_host, self.bind_port))
+
+        try:
+            proxy_socket.bind((self.bind_host, self.bind_port))
+            proxy_socket.listen(5)
+            print(f"[*] Proxy server started on {self.bind_host}:{self.bind_port}")
+        except Exception as e:
+            print(f"[*] Failed to start proxy server on {self.bind_host}:{self.bind_port} | {e}")
 
         while True:
             client_socket, addr = proxy_socket.accept()
@@ -48,7 +52,7 @@ class ProxyServer:
 
         # Extract the host and port from the request headers
         host, port = self.extract_host_port(self, request)
-        print(f"[*] Request sent to {host}:{port}")
+        print(f"[*] {self.bind_host}:{self.bind_port} | Request sent to {host}:{port}")
 
         if port == 443:  # HTTPS connection
             self.handle_https_tunnel(self, client_socket, host, port)
@@ -108,18 +112,9 @@ class ProxyServer:
 
 
 def main():
-    proxy_servers = []
-
     for PROXY in PROXIES:
         if PROXY["STATUS"] == "ENABLED":
-            proxy_servers.append(ProxyServer(PROXY["HOST"], PROXY["PORT"], 8192))
-
-    for proxy_server in proxy_servers:
-        try:
-            proxy_thread = threading.Thread(target=proxy_server.start)
-            proxy_thread.start()
-        except OSError as e:
-            print(f"[*] Proxy server on {proxy_server.bind_host}:{proxy_server.bind_port} failed to start | {e}")
+            threading.Thread(target=ProxyServer(PROXY["HOST"], PROXY["PORT"], 8192).start).start()
 
 
 if __name__ == '__main__':
