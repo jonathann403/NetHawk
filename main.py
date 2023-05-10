@@ -19,14 +19,15 @@ class ProxyServer:
             print(f"[*] Proxy server started on {self.bind_host}:{self.bind_port}")
         except Exception as e:
             print(f"[*] Failed to start proxy server on {self.bind_host}:{self.bind_port} | {e}")
+            return
 
         while True:
-            client_socket, addr = proxy_socket.accept()
-            # print("[*] Accepted connection from {}:{}".format(addr[0], addr[1]))
-
-            # Create a new thread to handle the client connection
-            client_thread = threading.Thread(target=self.handle_client, args=(client_socket,))
-            client_thread.start()
+            try:
+                client_socket, addr = proxy_socket.accept()
+                client_thread = threading.Thread(target=self.handle_client, args=(client_socket,))
+                client_thread.start()
+            except Exception as e:
+                print(f"[*] Failed to accept client connection | {e}")
 
     @staticmethod
     def extract_host_port(self, request):
@@ -88,15 +89,24 @@ class ProxyServer:
         client_socket.send(success_response)
 
         # Start bidirectional forwarding between the client and target server
-        forward_client_to_target = threading.Thread(target=self.forward_data, args=(self, client_socket, target_socket))
-        forward_target_to_client = threading.Thread(target=self.forward_data, args=(self, target_socket, client_socket))
+        forward_client_to_target = threading.Thread(target=self.forward_data, args=(client_socket, target_socket))
+        forward_target_to_client = threading.Thread(target=self.forward_data, args=(target_socket, client_socket))
 
         forward_client_to_target.start()
         forward_target_to_client.start()
 
     @staticmethod
-    def forward_data(self, source_socket, destination_socket):
+    def forward_data(source_socket, destination_socket):
         while True:
+            data = source_socket.recv(8192)
+            if data:
+                destination_socket.send(data)
+            else:
+                break
+        source_socket.close()
+        destination_socket.close()
+
+        """        while True:
             try:
                 data = source_socket.recv(self.buffer_size)
                 if data:
@@ -104,11 +114,8 @@ class ProxyServer:
                 else:
                     break
             except OSError as e:
-                print("Error occurred during data forwarding:", e)
-                break
-
-        source_socket.close()
-        destination_socket.close()
+                print(f"[*] {self.bind_host}:{self.bind_port} | {e}")
+                break"""
 
 
 def main():
