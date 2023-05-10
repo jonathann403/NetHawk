@@ -45,7 +45,7 @@ class ProxyServer:
     def handle_client(self, client_socket):
         # Receive the client's request
         request = client_socket.recv(4096)
-        print("[*] Received request:\n", request)
+        # print("[*] Received request:\n", request)
 
         # Extract the host and port from the request headers
         host, port = extract_host_port(request)
@@ -95,10 +95,14 @@ class ProxyServer:
     @staticmethod
     def forward_data(self, source_socket, destination_socket):
         while True:
-            data = source_socket.recv(4096)
-            if data:
-                destination_socket.send(data)
-            else:
+            try:
+                data = source_socket.recv(4096)
+                if data:
+                    destination_socket.send(data)
+                else:
+                    break
+            except OSError as e:
+                print("Error occurred during data forwarding:", e)
                 break
 
         source_socket.close()
