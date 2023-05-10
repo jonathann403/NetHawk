@@ -1,56 +1,59 @@
-import socket
+from config import PROXIES
 import threading
-
-PROXY_ADDRESS = '127.0.0.1'
-PROXY_PORT = 9191
-
-
-def extract_host_port(request):
-    host = ""
-    port = 80  # Default port if not specified
-
-    # Parse the request headers to extract the host and port
-    headers = request.split(b'\r\n')
-    for header in headers:
-        if header.startswith(b'Host:'):
-            host = header.split(b' ')[1].decode()
-            if ':' in host:
-                host, port = host.split(':')
-                port = int(port)
-            break
-
-    return host, port
+import socket
 
 
 class ProxyServer:
 
-    def __init__(self, bind_host, bind_port):
+    def __init__(self, bind_host, bind_port, buffer_size):
         self.bind_host = bind_host
         self.bind_port = bind_port
+        self.buffer_size = buffer_size
 
     def start(self):
         proxy_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        proxy_socket.bind((self.bind_host, self.bind_port))
-        proxy_socket.listen(5)
-        print("[*] Proxy server started on {}:{}".format(self.bind_host, self.bind_port))
+
+        try:
+            proxy_socket.bind((self.bind_host, self.bind_port))
+            proxy_socket.listen(5)
+            print(f"[*] Proxy server started on {self.bind_host}:{self.bind_port}")
+        except Exception as e:
+            print(f"[*] Failed to start proxy server on {self.bind_host}:{self.bind_port} | {e}")
+            return
 
         while True:
-            client_socket, addr = proxy_socket.accept()
-            print("[*] Accepted connection from {}:{}".format(addr[0], addr[1]))
+            try:
+                client_socket, addr = proxy_socket.accept()
+                client_thread = threading.Thread(target=self.handle_client, args=(client_socket,))
+                client_thread.start()
+            except Exception as e:
+                print(f"[*] Failed to accept client connection | {e}")
 
-            # Create a new thread to handle the client connection
-            client_thread = threading.Thread(target=self.handle_client, args=(client_socket,))
-            client_thread.start()
+    @staticmethod
+    def extract_host_port(self, request):
+        host = ""
+        port = 80  # Default port if not specified
+
+        # Parse the request headers to extract the host and port
+        headers = request.split(b'\r\n')
+        for header in headers:
+            if header.startswith(b'Host:'):
+                host = header.split(b' ')[1].decode()
+                if ':' in host:
+                    host, port = host.split(':')
+                    port = int(port)
+                break
+
+        return host, port
 
     def handle_client(self, client_socket):
         # Receive the client's request
-        request = client_socket.recv(4096)
+        request = client_socket.recv(self.buffer_size)
         # print("[*] Received request:\n", request)
 
         # Extract the host and port from the request headers
-        host, port = extract_host_port(request)
-        print("[*] Request Host:", host)
-        print("[*] Request Port:", port)
+        host, port = self.extract_host_port(self, request)
+        print(f"[*] {self.bind_host}:{self.bind_port} | Request sent to {host}:{port}")
 
         if port == 443:  # HTTPS connection
             self.handle_https_tunnel(self, client_socket, host, port)
@@ -65,7 +68,7 @@ class ProxyServer:
         target_socket.send(request)
 
         # Receive the response from the target server
-        response = target_socket.recv(4096)
+        response = target_socket.recv(self.buffer_size)
         # print("[*] Received response:\n", response)
 
         # Send the response back to the client
@@ -86,30 +89,34 @@ class ProxyServer:
         client_socket.send(success_response)
 
         # Start bidirectional forwarding between the client and target server
-        forward_client_to_target = threading.Thread(target=self.forward_data, args=(self, client_socket, target_socket))
-        forward_target_to_client = threading.Thread(target=self.forward_data, args=(self, target_socket, client_socket))
+        forward_client_to_target = threading.Thread(target=self.forward_data, args=(self, client_socket, target_socket, host, port))
+        forward_target_to_client = threading.Thread(target=self.forward_data, args=(self, target_socket, client_socket, host, port))
 
         forward_client_to_target.start()
         forward_target_to_client.start()
 
     @staticmethod
-    def forward_data(self, source_socket, destination_socket):
+    def forward_data(self, source_socket, destination_socket, host, port):
         while True:
             try:
-                data = source_socket.recv(4096)
+                data = source_socket.recv(self.buffer_size)
                 if data:
                     destination_socket.send(data)
                 else:
                     break
             except OSError as e:
-                print("Error occurred during data forwarding:", e)
+                print(f"[*] {self.bind_host}:{self.bind_port} | {host}:{port} closed | {e}")
                 break
-
         source_socket.close()
         destination_socket.close()
 
 
+def main():
+    for PROXY in PROXIES:
+        if PROXY["STATUS"] == "ENABLED":
+            threading.Thread(target=ProxyServer(PROXY["HOST"], PROXY["PORT"], 8192).start).start()
+
+
 if __name__ == '__main__':
-    proxy_server = ProxyServer(PROXY_ADDRESS, PROXY_PORT)
-    proxy_server.start()
+    main()
 
