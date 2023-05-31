@@ -10,4 +10,3 @@ PROXIES = [
         "STATUS": "ENABLED"
     }
 ]
-
