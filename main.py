@@ -1,3 +1,4 @@
+from analyze import extract_host_port
 from config import PROXIES
 import threading
 import socket
@@ -29,30 +30,13 @@ class ProxyServer:
             except Exception as e:
                 print(f"[*] Failed to accept client connection | {e}")
 
-    @staticmethod
-    def extract_host_port(self, request):
-        host = ""
-        port = 80  # Default port if not specified
-
-        # Parse the request headers to extract the host and port
-        headers = request.split(b'\r\n')
-        for header in headers:
-            if header.startswith(b'Host:'):
-                host = header.split(b' ')[1].decode()
-                if ':' in host:
-                    host, port = host.split(':')
-                    port = int(port)
-                break
-
-        return host, port
-
     def handle_client(self, client_socket):
         # Receive the client's request
         request = client_socket.recv(self.buffer_size)
         # print("[*] Received request:\n", request)
 
         # Extract the host and port from the request headers
-        host, port = self.extract_host_port(self, request)
+        host, port = extract_host_port(request)
         print(f"[*] {self.bind_host}:{self.bind_port} | Request sent to {host}:{port}")
 
         if port == 443:  # HTTPS connection
@@ -68,7 +52,11 @@ class ProxyServer:
         target_socket.send(request)
 
         # Receive the response from the target server
-        response = target_socket.recv(self.buffer_size)
+        try:
+            response = target_socket.recv(self.buffer_size)
+        except Exception as e:
+            print(f"[*] Failed to receive response from target server | {e}")
+            return
         # print("[*] Received response:\n", response)
 
         # Send the response back to the client
