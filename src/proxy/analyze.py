@@ -1,15 +1,20 @@
-def extract_host_port(request):
-    host = ""
-    port = 80  # Default port if not specified
+DEFAULT_PORT = 80
 
-    # Parse the request headers to extract the host and port
-    headers = request.split(b'\r\n')
-    for header in headers:
+def extract_host_port(request_headers):
+    host = ""
+    port = DEFAULT_PORT
+
+    for header in request_headers:
         if header.startswith(b'Host:'):
-            host = header.split(b' ')[1].decode()
-            if ':' in host:
-                host, port = host.split(':')
-                port = int(port)
+            host_with_port = header.split(b' ')[1].decode()
+            if ':' in host_with_port:
+                host, port_str = host_with_port.split(':')
+                try:
+                    port = int(port_str)
+                except ValueError:
+                    pass  # Invalid port, use the default
+            else:
+                host = host_with_port
             break
 
     return host, port
